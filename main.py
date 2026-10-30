@@ -1,54 +1,112 @@
-# Import
-from flask import Flask, render_template,request, redirect
-# Importing the database library
+# Importación
+from flask import Flask, render_template, request, redirect, session
+# Conexión de la biblioteca de bases de datos
 from flask_sqlalchemy import SQLAlchemy
 
 
 app = Flask(__name__)
-# Connecting SQLite
+# Establecer la clave secreta para la sesión.
+app.secret_key = 'my_top_secret_123'
+# Estableciendo conexión SQLite
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///diary.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# Creating a DB
-db = SQLAlchemy(app )
+# Creando la DB
+db = SQLAlchemy(app)
+# Creando la tabla
 
-#Assignment #1. Create a DB table
+class Card(db.Model):
+    # Estableciendo los campos de enrada
+    # id
+    id = db.Column(db.Integer, primary_key=True)
+    # título
+    title = db.Column(db.String(100), nullable=False)
+    # Descripción
+    subtitle = db.Column(db.String(300), nullable=False)
+    # Texto
+    text = db.Column(db.Text, nullable=False)
+    # El correo electrónico del propietario de la tarjeta.
+    user_email = db.Column(db.String(100), nullable=False)
 
-
-
-
-
-
-
-
-
-
-
-# Running the page with content
-@app.route('/')
-def index():
-    # Displaying the DB objects
-    # Assignment #2. Display the objects from the DB in index.html
+    # Objeto de salida y su ID
+    def __repr__(self):
+        return f'<Card {self.id}>'
     
 
-    return render_template('index.html',
-                           #cards = cards
+# Tarea #1. Crear la tabla de usuarios
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(100), nullable=False, unique=True)
+    password = db.Column(db.String(100), nullable=False)
 
-                           )
+    def __repr__(self):
+        return f'<User {self.email}>'
+# Crear automáticamente la base de datos y las tablas
+with app.app_context():
+    db.create_all()
+# Lanzamiento de la página de contenido
+@app.route('/', methods=['GET','POST'])
+def login():
+    error = ''
+    if request.method == 'POST':
+        form_login = request.form['email']
+        form_password = request.form['password']
+            
+        # Tarea #4. Implementar la verificación de usuario
+        users_db = User.query.all()
+        for user in users_db:
+            if form_login == user.email and form_password == user.password:
+                session['user_email'] = user.email
+                return redirect('/index')
+        error = 'Incorrect username or password'
+        return render_template('login.html', error=error)
+     
+    else:
+        return render_template('login.html')
 
-# Running the page with the card
+
+
+@app.route('/reg', methods=['GET','POST'])
+def reg():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        
+        # Tarea #3. Implementar grabación de usuarios
+        new_user = User(email=email, password=password)
+        db.session.add(new_user)
+        db.session.commit()
+
+        
+        return redirect('/')
+    
+    else:    
+        return render_template('registration.html')
+
+
+# Iniciar página de contenido
+@app.route('/index')
+def index():
+    # Tarea # 4. Asegúrese de que el usuario solo vea sus propias tarjetas
+    if 'user_email' in session:
+        user_email = session['user_email']
+        cards = Card.query.filter_by(user_email=user_email).order_by(Card.id).all()
+        return render_template('index.html', cards=cards)
+    cards = Card.query.order_by(Card.id).all()
+    return render_template('index.html', cards=cards)
+
+# Lanzando la página de la tarjeta
 @app.route('/card/<int:id>')
 def card(id):
-    # Assignment #2. Display the right card by its id
-    
+    card = Card.query.get(id)
 
     return render_template('card.html', card=card)
 
-# Running the page and creating the card
+# Iniciando la página de creación de tarjetas
 @app.route('/create')
 def create():
     return render_template('create_card.html')
 
-# The card form
+# la forma de la tarjeta
 @app.route('/form_create', methods=['GET','POST'])
 def form_create():
     if request.method == 'POST':
@@ -56,16 +114,18 @@ def form_create():
         subtitle =  request.form['subtitle']
         text =  request.form['text']
 
-        # Assignment #2. Create a way to store data in the DB
-        
+        # Tarea # 4. Hacer que la creación de la tarjeta se realice en nombre del usuario
+        if 'user_email' in session:
+            user_email = session['user_email']
+            card = Card(title=title, subtitle=subtitle, text=text, user_email=user_email)
+        else:
+            card = Card(title=title, subtitle=subtitle, text=text)
 
-
-
-
-        return redirect('/')
+        db.session.add(card)
+        db.session.commit()
+        return redirect('/index')
     else:
         return render_template('create_card.html')
-
 
 if __name__ == "__main__":
     app.run(debug=True)
